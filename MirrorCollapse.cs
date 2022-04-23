@@ -20,23 +20,30 @@ public static class MirrorCollapse {
 
     public static void Load() {
       var loadFrom = new FileInfo(Path.Join(_mirrorCollapseDataDirectory.FullName, SettingsFile));
-      if(!loadFrom.Exists)
-        return;
+      if(loadFrom.Exists) {
+        using var stream = new StreamReader(loadFrom.OpenRead());
+        var       dict   = JsonConvert.DeserializeObject<Dictionary<string, object?>>(stream.ReadToEnd()) ?? throw new JsonSerializationException();
+        foreach(var (key, value) in dict) {
+          var field = typeof(MirrorCollapseSettings).GetField(key);
+          if(field is null || field.IsLiteral || field.IsInitOnly) {
+            Console.Error.WriteLine($"Illegal Setting: '{key}' doesn't exist or is not valid.");
+            continue;
+          }
 
-      using var stream = new StreamReader(loadFrom.OpenRead());
-      var       dict   = JsonConvert.DeserializeObject<Dictionary<string, object?>>(stream.ReadToEnd()) ?? throw new JsonSerializationException();
-      foreach(var (key, value) in dict) {
-        var field = typeof(MirrorCollapseSettings).GetField(key);
-        if(field is null || field.IsLiteral || field.IsInitOnly) {
-          Console.Error.WriteLine($"Illegal Setting: '{key}' doesn't exist or is not valid.");
+          try {
+            field.SetValue(null, value);
+          } catch(ArgumentException) {
+            Console.Error.WriteLine($"Illegal Setting: '{key}' invalid Type");
+          }
+        }
+      }
+
+      foreach(var field in typeof(MirrorCollapseSettings).GetFields()) {
+        if(Environment.GetEnvironmentVariable(field.Name) is not { } env)
           continue;
-        }
-
-        try {
-          field.SetValue(null, value);
-        } catch(ArgumentException) {
-          Console.Error.WriteLine($"Illegal Setting: '{key}' invalid Type");
-        }
+        if(field.IsLiteral || field.IsInitOnly)
+          continue;
+        field.SetValue(null, env);
       }
     }
 
