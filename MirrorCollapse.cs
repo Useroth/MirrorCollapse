@@ -259,7 +259,15 @@ public static class MirrorCollapse {
     var pr = new NewPullRequest($"[MIRROR]{MirrorCollapseSettings.PRTitlePrefix} {pull.Title}", branchName, _originRepository.DefaultBranch) {
                                                                                                           Body = $"-- Mirror Pull Request - MirrorCollapse -- \n{MirrorCollapseSettings.PRBodyPrefix}\n" + pull.Body
                                                                                                         };
-    await _githubClient!.Repository.PullRequest.Create(_originRepository.Id, pr);
+    try {
+      await _githubClient!.Repository.PullRequest.Create(_originRepository.Id, pr);
+    } catch(ApiValidationException apiE) {
+      if(apiE.HttpResponse.Body is not string apiResp)
+        return;
+      if(apiResp.Contains("No commits between master and"))
+        await AddMirroredPull(pull.Number);
+      return;
+    }
     await AddMirroredPull(pull.Number);
   }
 }
